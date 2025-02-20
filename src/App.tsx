@@ -18,9 +18,11 @@ interface QuizAttempt {
   totalQuestions: number;
 }
 
+type Answer = string | number;
+
 function App() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [answers, setAnswers] = useState<(string | number)[]>([]);
+  const [answers, setAnswers] = useState<Answer[]>([]);
   const [timeLeft, setTimeLeft] = useState(30);
   const [attempts, setAttempts] = useState<QuizAttempt[]>([]);
   const [quizStarted, setQuizStarted] = useState(false);
@@ -29,6 +31,14 @@ function App() {
   const [isOpen, setIsOpen] = useState(false);
   const [db] = useState(() => new QuizDatabase());
 
+  // Calculate score from answers
+  const calculateScore = (answers: Answer[]): number => {
+    return answers.reduce((acc: number, answer, index) => {
+      return answer === quizQuestions[index].correctAnswer ? acc + 1 : acc;
+    }, 0);
+  };
+
+  // Load attempts from IndexedDB
   useEffect(() => {
     const loadAttempts = async () => {
       try {
@@ -62,6 +72,7 @@ function App() {
     return () => clearInterval(timer);
   }, [quizStarted, showResults, currentQuestion, timeLeft]);
 
+  // Close sidebar when quiz starts
   useEffect(() => {
     if (quizStarted) {
       setIsOpen(false);
@@ -78,7 +89,7 @@ function App() {
     setIsOpen(false);
   };
 
-  const handleAnswer = (answer: string | number) => {
+  const handleAnswer = (answer: Answer) => {
     const newAnswers = [...answers];
     newAnswers[currentQuestion] = answer;
     setAnswers(newAnswers);
@@ -93,11 +104,9 @@ function App() {
   };
 
   const finishQuiz = async () => {
-    const score = answers.reduce((acc, answer, index) => {
-      return answer === quizQuestions[index].correctAnswer ? acc + 1 : acc;
-    }, 0);
+    const score = calculateScore(answers);
 
-    const attempt = {
+    const attempt: QuizAttempt = {
       date: new Date().toLocaleString(),
       score,
       totalQuestions: quizQuestions.length,
@@ -120,11 +129,13 @@ function App() {
     }
   };
 
+  const currentScore = calculateScore(answers);
+  const scorePercentage = (currentScore / quizQuestions.length) * 100;
+
   return (
     <ThemeProvider defaultTheme="dark" storageKey="quiz-theme">
       <div className="relative min-h-screen w-full overflow-x-hidden bg-background text-foreground">
         <QuizScene />
-
         <header className="fixed top-0 left-0 right-0 p-4 flex justify-between items-center bg-background/90 backdrop-blur-md z-20 shadow-md">
           <Button
             variant="ghost"
@@ -148,6 +159,19 @@ function App() {
 
         <header className="fixed top-0 left-0 right-0 p-4 flex justify-between items-center bg-background/80 backdrop-blur-sm z-10">
           <Sheet open={isOpen} onOpenChange={setIsOpen}>
+            {/* <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleSidebar}
+              disabled={quizStarted}
+              className={`${
+                quizStarted
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:bg-accent hover:text-accent-foreground"
+              }`}
+            >
+              <Menu className="h-6 w-6" />
+            </Button> */}
             <SheetContent side="left" className="w-[400px]">
               <div className="flex flex-col h-full">
                 <h2 className="text-2xl font-bold mb-6">Attempt History</h2>
@@ -228,26 +252,9 @@ function App() {
                   <div className="space-y-4">
                     <div className="p-4 bg-muted rounded-lg">
                       <p className="text-lg font-semibold text-center">
-                        Final Score:{" "}
-                        {answers.reduce((acc, answer, index) => {
-                          return answer === quizQuestions[index].correctAnswer
-                            ? acc + 1
-                            : acc;
-                        }, 0)}
-                        /{quizQuestions.length}
+                        Final Score: {currentScore}/{quizQuestions.length}
                       </p>
-                      <Progress
-                        value={
-                          (answers.reduce((acc, answer, index) => {
-                            return answer === quizQuestions[index].correctAnswer
-                              ? acc + 1
-                              : acc;
-                          }, 0) /
-                            quizQuestions.length) *
-                          100
-                        }
-                        className="mt-2"
-                      />
+                      <Progress value={scorePercentage} className="mt-2" />
                     </div>
 
                     <Button onClick={startQuiz} className="w-full">
